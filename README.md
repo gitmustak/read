@@ -15,8 +15,3 @@ A Chrome extension that translates selected text in place, so you can read Benga
 2. Click the ReadMEasy icon and press **Translate**.
 3. Press **Restore original** to bring the original text back.
 
-## Install (developer mode)
-
-1. Open `chrome://extensions` and turn on **Developer mode**.
-2. Click **Load unpacked** and select this folder.
-3. Pin the extension to your toolbar.
