@@ -1,9 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const statusEl = $("status");
 
-function setStatus(msg, isErr = false) {
+function setStatus(msg, isErr = false, isOk = false) {
   statusEl.textContent = msg;
-  statusEl.className = isErr ? "err" : "";
+  statusEl.className = isErr ? "err" : isOk ? "ok" : "";
 }
 
 async function translate(text, from) {
@@ -20,42 +20,111 @@ async function translate(text, from) {
   return data[0].map((part) => part[0]).join("");
 }
 
+let toastTimer;
+function showToast(msg) {
+  const t = $("toast");
+  t.firstElementChild.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1200);
+}
+
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
 }
 
-async function send(tabId, msg) {
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
-  return chrome.tabs.sendMessage(tabId, msg);
+let tabId = null;
+let selectedText = "";
+let pending = null; // { lang, promise } — translation started before the click
+
+function prefetch() {
+  if (!selectedText) return;
+  const lang = $("lang").value;
+  const promise = translate(selectedText, lang);
+  promise.catch(() => {}); // errors surface when the user clicks
+  pending = { lang, promise };
 }
 
-async function run() {
+async function inject(id) {
+  await chrome.scripting.executeScript({ target: { tabId: id }, files: ["content.js"] });
+}
+
+const send = (msg) => chrome.tabs.sendMessage(tabId, msg);
+
+const PROMPT = "Select any text to translate";
+let idleTimer;
+const actionBtn = $("action");
+let mode = "none"; // "none" | "translate" | "restore"
+
+function setMode(next) {
+  mode = next;
+  actionBtn.hidden = next === "none";
+  actionBtn.textContent = next === "restore" ? "Restore original" : "Translate";
+  actionBtn.classList.toggle("secondary", next === "restore");
+}
+
+async function init() {
   try {
-    const tab = await activeTab();
-    const sel = await send(tab.id, { type: "getSelection" });
-    if (!sel || !sel.text) return setStatus("No text selected on the page.", true);
-    setStatus("Translating…");
-    const out = await translate(sel.text, $("lang").value);
-    await send(tab.id, { type: "replace", text: out });
-    window.close();
+    tabId = (await activeTab()).id;
+    await inject(tabId);
+    const sel = await send({ type: "getSelection" });
+    selectedText = (sel && sel.text) || "";
+    if (selectedText) {
+      setMode("translate");
+      setStatus("");
+      prefetch();
+    } else if (sel && sel.translated) {
+      setMode("restore");
+      setStatus("This page has translated text.", false, true);
+    } else {
+      setMode("none");
+      setStatus(PROMPT);
+    }
   } catch (e) {
-    setStatus(e.message || String(e), true);
+    setMode("none");
+    setStatus("Can't run on this page.", true);
   }
 }
 
-$("lang").value = localStorage.getItem("lang") || "bn";
-$("lang").addEventListener("change", () => localStorage.setItem("lang", $("lang").value));
-$("go").addEventListener("click", run);
-$("undo").addEventListener("click", async () => {
+async function translateSelection() {
+  actionBtn.disabled = true;
   try {
-    const tab = await activeTab();
-    await send(tab.id, { type: "restore" });
-    setStatus("Restored.");
+    if (!pending || pending.lang !== $("lang").value) prefetch();
+    const out = await pending.promise.catch((e) => {
+      pending = null; // allow a fresh attempt on the next click
+      throw e;
+    });
+    await send({ type: "replace", text: out });
+    setMode("restore");
+    setStatus("");
+    showToast("Translated ✓");
+  } finally {
+    actionBtn.disabled = false;
+  }
+}
+
+async function restoreOriginal() {
+  await send({ type: "restore" });
+  setMode("none");
+  setStatus("Original text restored.", false, true);
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (mode === "none") setStatus(PROMPT);
+  }, 1800);
+}
+
+$("lang").value = localStorage.getItem("lang") || "bn";
+$("lang").addEventListener("change", () => {
+  localStorage.setItem("lang", $("lang").value);
+  if (mode === "translate") prefetch();
+});
+actionBtn.addEventListener("click", async () => {
+  try {
+    await (mode === "restore" ? restoreOriginal() : translateSelection());
   } catch (e) {
     setStatus(e.message || String(e), true);
   }
 });
 
-// Translate right away when the popup opens, if something is selected.
-run();
+init();

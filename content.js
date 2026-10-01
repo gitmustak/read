@@ -108,10 +108,10 @@ if (!window.__inlineTranslatorLoaded) {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed) {
         savedRange = null;
-        sendResponse({ text: "" });
+        sendResponse({ text: "", translated: records.length > 0 });
       } else {
         savedRange = sel.getRangeAt(0).cloneRange();
-        sendResponse({ text: sel.toString() });
+        sendResponse({ text: sel.toString(), translated: records.length > 0 });
       }
     } else if (msg.type === "replace") {
       replaceSelection(msg.text);

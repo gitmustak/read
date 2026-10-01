@@ -2,26 +2,168 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <link rel="preconnect" href="https://translate.googleapis.com">
   <style>
-    body { width: 260px; margin: 0; padding: 12px; font: 14px system-ui, sans-serif; }
-    select, button { width: 100%; padding: 8px; margin-top: 8px; font-size: 14px; }
-    button { cursor: pointer; }
-    #status { margin-top: 10px; min-height: 18px; color: #555; font-size: 12px; }
-    #status.err { color: #c00; }
+    :root {
+      --cream: #FFF3D5;
+      --green: #4D694E;
+      --bg: var(--cream);
+      --ink: var(--green);
+      --surface: color-mix(in srgb, var(--green) 10%, var(--cream));
+      --border: color-mix(in srgb, var(--green) 30%, var(--cream));
+      --muted: color-mix(in srgb, var(--green) 70%, var(--cream));
+    }
+    /* Dark mode: swap the two colors */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: var(--green);
+        --ink: var(--cream);
+        --surface: color-mix(in srgb, var(--cream) 12%, var(--green));
+        --border: color-mix(in srgb, var(--cream) 30%, var(--green));
+        --muted: color-mix(in srgb, var(--cream) 75%, var(--green));
+      }
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.4 ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+            "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    header img { width: 32px; height: 32px; border-radius: 8px; }
+    h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+    .tag { margin: 1px 0 0; font-size: 12px; color: var(--muted); }
+
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+    label {
+      display: block;
+      margin: 0;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    select {
+      width: auto;
+      padding: 5px 26px 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface)
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%234D694E' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+        no-repeat right 9px center;
+      color: var(--ink);
+      font: inherit;
+      font-size: 12px;
+      appearance: none;
+      cursor: pointer;
+    }
+    @media (prefers-color-scheme: dark) {
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%23FFF3D5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      }
+    }
+    select:focus-visible, button:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    .actions { display: grid; gap: 8px; margin-top: 14px; }
+
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+      transition: opacity 0.15s, background 0.15s;
+    }
+    button[hidden] { display: none; }
+    #action { border: 0; background: var(--ink); color: var(--bg); }
+    #action:hover { opacity: 0.88; }
+    #action.secondary { border: 1px solid var(--border); background: transparent; color: var(--ink); }
+    #action.secondary:hover { background: var(--surface); opacity: 1; }
+
+    .slot { position: relative; height: 36px; margin-top: 14px; }
+
+    #status {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 8px 10px;
+      border-radius: 14px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    #status:empty { visibility: hidden; }
+    #status.err { color: var(--ink); }
+    #status.err::before { content: "⚠ "; }
+    #status.ok { color: var(--ink); }
+    #status.ok::before { content: "✓ "; }
+    #toast {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transform: translateY(6px) scale(0.96);
+      transition: opacity 0.28s ease, transform 0.28s ease;
+      pointer-events: none;
+    }
+    #toast span {
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--bg);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    #toast.show { opacity: 1; transform: none; }
   </style>
 </head>
 <body>
-  <h3 style="margin:0 0 8px">ReadMEasy</h3>
-  <label>Translate from
-    <select id="lang">
-      <option value="bn">Bengali → English</option>
-      <option value="hi">Hindi → English</option>
-      <option value="auto">Auto-detect → English</option>
-    </select>
-  </label>
-  <button id="go">Translate selection</button>
-  <button id="undo">Restore original</button>
-  <div id="status">Select text on the page first.</div>
+  <header>
+    <img src="icons/icon48.png" alt="">
+    <div>
+      <h1>ReadMEasy</h1>
+      <p class="tag">Read it in English, right where it is</p>
+    </div>
+  </header>
+
+  <div class="row">
+  <label for="lang">Translate from</label>
+  <select id="lang">
+    <option value="bn">Bengali → English</option>
+    <option value="hi">Hindi → English</option>
+    <option value="auto">Auto-detect → English</option>
+  </select>
+  </div>
+
+  <div class="actions">
+    <button id="action" hidden></button>
+  </div>
+
+  <div class="slot">
+    <div id="status">Select any text to translate</div>
+    <div id="toast"><span></span></div>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
