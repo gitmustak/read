@@ -1,0 +1,124 @@
+if (!window.__inlineTranslatorLoaded) {
+  window.__inlineTranslatorLoaded = true;
+
+  let savedRange = null;
+  // Each record: { node, container, full, applied }
+  //   full    = the text node's original data
+  //   applied = the data we wrote into it
+  // React (Facebook etc.) may reset a node's data or swap the node out, so a
+  // MutationObserver re-applies our translation whenever that happens.
+  const records = [];
+  let observer = null;
+  let scheduled = false;
+
+  function textNodesIn(range) {
+    const root = range.commonAncestorContainer;
+    if (root.nodeType === Node.TEXT_NODE) return [root];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      if (range.intersectsNode(walker.currentNode)) nodes.push(walker.currentNode);
+    }
+    return nodes;
+  }
+
+  // A few levels up from the text node, so we can find it again if React
+  // replaces the node itself but keeps the surrounding element.
+  function containerFor(node) {
+    let el = node.parentElement;
+    for (let i = 0; i < 3 && el && el.parentElement && el.parentElement !== document.body; i++) {
+      el = el.parentElement;
+    }
+    return el;
+  }
+
+  function findNodeWithData(container, data) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      if (walker.currentNode.data === data) return walker.currentNode;
+    }
+    return null;
+  }
+
+  function reapply() {
+    scheduled = false;
+    for (let i = records.length - 1; i >= 0; i--) {
+      const r = records[i];
+      if (r.node.isConnected) {
+        if (r.node.data === r.full && r.applied !== r.full) r.node.data = r.applied;
+      } else if (r.container && r.container.isConnected) {
+        const fresh = findNodeWithData(r.container, r.full);
+        if (fresh) {
+          r.node = fresh;
+          fresh.data = r.applied;
+        }
+      } else {
+        records.splice(i, 1); // post was unmounted (scrolled away / navigated)
+      }
+    }
+    if (!records.length) stopObserving();
+  }
+
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(reapply);
+  }
+
+  function startObserving() {
+    if (observer) return;
+    observer = new MutationObserver(schedule);
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+  }
+
+  function stopObserving() {
+    if (observer) observer.disconnect();
+    observer = null;
+  }
+
+  function replaceSelection(text) {
+    if (!savedRange) return;
+    const nodes = textNodesIn(savedRange);
+    let placed = false;
+    for (const node of nodes) {
+      const start = node === savedRange.startContainer ? savedRange.startOffset : 0;
+      const end = node === savedRange.endContainer ? savedRange.endOffset : node.data.length;
+      if (!node.data.slice(start, end).trim()) continue;
+      const full = node.data;
+      const applied = full.slice(0, start) + (placed ? "" : text) + full.slice(end);
+      records.push({ node, container: containerFor(node), full, applied });
+      node.data = applied;
+      placed = true;
+    }
+    window.getSelection().removeAllRanges();
+    savedRange = null;
+    if (records.length) startObserving();
+  }
+
+  function restore() {
+    stopObserving();
+    for (const r of records) {
+      if (r.node.isConnected && r.node.data === r.applied) r.node.data = r.full;
+    }
+    records.length = 0;
+  }
+
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg.type === "getSelection") {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) {
+        savedRange = null;
+        sendResponse({ text: "" });
+      } else {
+        savedRange = sel.getRangeAt(0).cloneRange();
+        sendResponse({ text: sel.toString() });
+      }
+    } else if (msg.type === "replace") {
+      replaceSelection(msg.text);
+      sendResponse({ ok: true });
+    } else if (msg.type === "restore") {
+      restore();
+      sendResponse({ ok: true });
+    }
+  });
+}

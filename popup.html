@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 260px; margin: 0; padding: 12px; font: 14px system-ui, sans-serif; }
+    select, button { width: 100%; padding: 8px; margin-top: 8px; font-size: 14px; }
+    button { cursor: pointer; }
+    #status { margin-top: 10px; min-height: 18px; color: #555; font-size: 12px; }
+    #status.err { color: #c00; }
+  </style>
+</head>
+<body>
+  <h3 style="margin:0 0 8px">ReadMEasy</h3>
+  <label>Translate from
+    <select id="lang">
+      <option value="bn">Bengali → English</option>
+      <option value="hi">Hindi → English</option>
+      <option value="auto">Auto-detect → English</option>
+    </select>
+  </label>
+  <button id="go">Translate selection</button>
+  <button id="undo">Restore original</button>
+  <div id="status">Select text on the page first.</div>
+  <script src="popup.js"></script>
+</body>
+</html>
