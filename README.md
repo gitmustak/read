@@ -1,7 +1,6 @@
-# readMeasy
+# readMeasy (read-em-easy)
 
-- Read-em-easy
-- A Chrome extension that translates selected text in place, so you can read Bengali or Hindi posts in English without leaving the page.
+A Chrome extension that translates selected text in place, so you can read Bengali or Hindi posts in English without leaving the page.
 
 ## Features
 
